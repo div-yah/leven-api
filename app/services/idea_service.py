@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
-from app.models.idea import Idea, IdeaStatus
+from app.models.idea import Idea, IdeaStatus, IdeaContentType
 from app.models.tag import Tag
 from app.schemas.idea import IdeaCreate, IdeaUpdate
+from app.services.link_metadata import fetch_link_preview_image
 from typing import Optional, List
 import uuid
 
@@ -55,6 +56,14 @@ def create_idea(db: Session, data: IdeaCreate, owner_id: uuid.UUID) -> Idea:
     tag_ids = data.tag_ids
     idea_data = data.model_dump(exclude={"tag_ids"})
     idea = Idea(**idea_data, owner_id=owner_id)
+
+    if (
+        idea.content_type == IdeaContentType.link
+        and idea.link
+        and not idea.image_url
+    ):
+        idea.image_url = fetch_link_preview_image(idea.link)
+
     if tag_ids:
         tags = db.query(Tag).filter(Tag.id.in_(tag_ids), Tag.owner_id == owner_id).all()
         idea.tags = tags
@@ -67,8 +76,21 @@ def create_idea(db: Session, data: IdeaCreate, owner_id: uuid.UUID) -> Idea:
 def update_idea(db: Session, idea: Idea, data: IdeaUpdate, owner_id: uuid.UUID) -> Idea:
     update_data = data.model_dump(exclude_unset=True)
     tag_ids = update_data.pop("tag_ids", None)
+
+    link_changed = "link" in update_data and update_data["link"] != idea.link
+    image_url_explicitly_set = "image_url" in update_data
+
     for field, value in update_data.items():
         setattr(idea, field, value)
+
+    if (
+        idea.content_type == IdeaContentType.link
+        and idea.link
+        and not image_url_explicitly_set
+        and (link_changed or not idea.image_url)
+    ):
+        idea.image_url = fetch_link_preview_image(idea.link)
+
     if tag_ids is not None:
         tags = db.query(Tag).filter(Tag.id.in_(tag_ids), Tag.owner_id == owner_id).all()
         idea.tags = tags

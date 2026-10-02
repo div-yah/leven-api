@@ -15,6 +15,20 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Allow the database URL to be overridden by the environment (e.g. when
+# running locally outside of docker-compose, where the "db" hostname in
+# alembic.ini does not resolve). Falls back to the value in alembic.ini.
+_database_url = os.environ.get("DATABASE_URL")
+if not _database_url:
+    try:
+        from app.core.config import settings
+
+        _database_url = settings.DATABASE_URL
+    except Exception:
+        _database_url = None
+if _database_url:
+    config.set_main_option("sqlalchemy.url", _database_url)
+
 
 def run_migrations_offline():
     url = config.get_main_option("sqlalchemy.url")

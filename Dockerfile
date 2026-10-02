@@ -9,4 +9,8 @@ COPY . .
 
 RUN mkdir -p uploads
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Railway (and most PaaS providers) inject a $PORT env var the container
+# must listen on; default to 8000 for local `docker run`.
+ENV PORT=8000
+EXPOSE 8000
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
